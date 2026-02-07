@@ -56,6 +56,13 @@ def show():
     with tab3:
         show_restituzione_fogli()
 
+def _reset_filtri():
+    """Callback per resettare tutti i filtri (eseguito prima del re-render)"""
+    keys_to_reset = ['ricerca_fogli', 'filtro_solo_con_file', 'filtro_data_da', 'filtro_data_a']
+    for key in keys_to_reset:
+        if key in st.session_state:
+            del st.session_state[key]
+
 def show_gestione_fogli():
     """Gestione completa dei fogli caccia"""
     st.subheader("Gestione Fogli Caccia A3")
@@ -114,30 +121,31 @@ def show_gestione_fogli():
             solo_con_file = st.checkbox(
                 "📁 Solo con File Excel",
                 value=False,
-                help="Mostra solo fogli con file Excel associato"
+                help="Mostra solo fogli con file Excel associato",
+                key="filtro_solo_con_file"
             )
-        
+
         with col_b:
             data_da = st.date_input(
                 "📅 Data Rilascio Da",
                 value=None,
                 format="DD/MM/YYYY",
-                help="Filtra fogli rilasciati da questa data in poi"
+                help="Filtra fogli rilasciati da questa data in poi",
+                key="filtro_data_da"
             )
-        
+
         with col_c:
             data_a = st.date_input(
                 "📅 Data Rilascio A",
                 value=None,
                 format="DD/MM/YYYY",
-                help="Filtra fogli rilasciati fino a questa data"
+                help="Filtra fogli rilasciati fino a questa data",
+                key="filtro_data_a"
             )
-        
+
         with col_d:
-            if st.button("🔄 Reset", help="Resetta tutti i filtri", use_container_width=True):
-                # Reset filtri
-                st.session_state.ricerca_fogli = ""
-                st.rerun()
+            st.button("🔄 Reset", help="Resetta tutti i filtri", use_container_width=True,
+                       on_click=_reset_filtri)
     
     # Recupera fogli
     stato_filtro = None if filtro_stato == 'Tutti' else filtro_stato
