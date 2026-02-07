@@ -175,8 +175,43 @@ def show_gestione_fogli():
             st.metric("Da Rinnovare", stats.get('da_rinnovare', 0),
                      help="Fogli da rinnovare per nuovo anno")
     
+    # ========== CANCELLA TUTTI I FOGLI ==========
+    # Pulsante per cancellare tutti i fogli dell'anno selezionato
+    if 'cancella_fogli_confirm' not in st.session_state:
+        st.session_state.cancella_fogli_confirm = False
+
+    with st.expander("⚠️ Operazioni Pericolose", expanded=False):
+        st.warning("**Attenzione:** Le operazioni qui sotto sono irreversibili.")
+        if st.button("🗑️ Cancella Tutti i Fogli dell'Anno", key="btn_cancella_tutti_fogli",
+                     use_container_width=True):
+            st.session_state.cancella_fogli_confirm = True
+            st.rerun()
+
+        if st.session_state.cancella_fogli_confirm:
+            totale = stats.get('totale', 0) if stats else 0
+            st.error(
+                f"⚠️ **Stai per cancellare TUTTI i {totale} fogli dell'anno {anno_selezionato}** "
+                f"e i relativi allegati. Questa operazione è **irreversibile**. "
+                f"Potrai ricaricarli tramite **Import Fogli Massivo**."
+            )
+            conf_col1, conf_col2, conf_col3 = st.columns([2, 2, 6])
+            with conf_col1:
+                if st.button("✅ Conferma Cancellazione", type="primary",
+                             key="confirm_cancella_tutti"):
+                    try:
+                        eliminati = st.session_state.db.cancella_tutti_fogli_anno(anno_selezionato)
+                        st.session_state.cancella_fogli_confirm = False
+                        st.success(f"✅ Cancellati {eliminati} fogli per l'anno {anno_selezionato}.")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"⚠️ Errore durante la cancellazione: {str(e)}")
+            with conf_col2:
+                if st.button("❌ Annulla", key="cancel_cancella_tutti"):
+                    st.session_state.cancella_fogli_confirm = False
+                    st.rerun()
+
     st.markdown("---")
-    
+
     # Elenco fogli
     if fogli:
         df_fogli = pd.DataFrame(fogli)
