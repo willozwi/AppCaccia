@@ -1153,7 +1153,49 @@ class GestionaleCacciaDB:
         conn.close()
         
         return dict(row) if row else {}
-    
+
+    def cancella_tutti_fogli_anno(self, anno: int) -> int:
+        """Cancella tutti i fogli caccia di un anno specifico e i relativi allegati.
+        Restituisce il numero di fogli eliminati."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        try:
+            # Recupera i numeri foglio dell'anno per eliminare gli allegati correlati
+            cursor.execute(
+                "SELECT numero_foglio FROM fogli_caccia WHERE anno = ?", (anno,)
+            )
+            numeri = [row['numero_foglio'] for row in cursor.fetchall()]
+
+            allegati_eliminati = 0
+            if numeri:
+                # Elimina allegati restituzioni collegati ai fogli dell'anno
+                placeholders = ','.join('?' * len(numeri))
+                cursor.execute(
+                    f"DELETE FROM restituzioni_allegati WHERE numero_foglio IN ({placeholders})",
+                    numeri
+                )
+                allegati_eliminati = cursor.rowcount
+
+            # Elimina tutti i fogli dell'anno
+            cursor.execute("DELETE FROM fogli_caccia WHERE anno = ?", (anno,))
+            fogli_eliminati = cursor.rowcount
+
+            conn.commit()
+
+            # Log attività
+            self.log_attivita(
+                'SISTEMA', 'DELETE_ALL', 'fogli_caccia', 0,
+                f"Cancellati {fogli_eliminati} fogli e {allegati_eliminati} allegati per anno {anno}"
+            )
+
+            return fogli_eliminati
+        except Exception as e:
+            conn.rollback()
+            raise e
+        finally:
+            conn.close()
+
     # ========== GESTIONE AUTORIZZAZIONI RAS ==========
     
     def aggiungi_autorizzazione(self, dati: Dict) -> int:
