@@ -179,7 +179,7 @@ class GestionaleCacciaDB:
             # Colonna non esiste, aggiungila
             cursor.execute("ALTER TABLE fogli_caccia ADD COLUMN consegnato INTEGER NOT NULL DEFAULT 0")
             conn.commit()
-        
+
         # ========== MIGRATION SAFE: Colonna restituito ==========
         # Aggiungi colonna restituito se non esiste già
         try:
@@ -187,6 +187,15 @@ class GestionaleCacciaDB:
         except sqlite3.OperationalError:
             # Colonna non esiste, aggiungila
             cursor.execute("ALTER TABLE fogli_caccia ADD COLUMN restituito INTEGER NOT NULL DEFAULT 0")
+            conn.commit()
+
+        # ========== MIGRATION SAFE: Colonna stampato ==========
+        # Aggiungi colonna stampato se non esiste già
+        try:
+            cursor.execute("SELECT stampato FROM fogli_caccia LIMIT 1")
+        except sqlite3.OperationalError:
+            # Colonna non esiste, aggiungila
+            cursor.execute("ALTER TABLE fogli_caccia ADD COLUMN stampato INTEGER NOT NULL DEFAULT 0")
             conn.commit()
         
         # ========== INDICI PER PERFORMANCE ==========
@@ -203,6 +212,7 @@ class GestionaleCacciaDB:
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_fogli_numero ON fogli_caccia(numero_foglio)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_fogli_consegnato ON fogli_caccia(consegnato)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_fogli_restituito ON fogli_caccia(restituito)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_fogli_stampato ON fogli_caccia(stampato)")
         
         # Indici libretti_regionali
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_libretti_anno ON libretti_regionali(anno)")
@@ -770,6 +780,41 @@ class GestionaleCacciaDB:
                 except:
                     pass
     
+    def set_stampato(self, foglio_id: int, value: bool) -> None:
+        """Imposta lo stato stampato di un foglio (checkbox)"""
+        conn = None
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+
+            cursor.execute("""
+                UPDATE fogli_caccia
+                SET stampato = ?, data_modifica = CURRENT_TIMESTAMP
+                WHERE id = ?
+            """, (1 if value else 0, foglio_id))
+
+            conn.commit()
+
+            try:
+                self.log_attivita('SISTEMA', 'UPDATE', 'fogli_caccia', foglio_id,
+                                 f"Stampato: {value}")
+            except:
+                pass
+
+        except Exception as e:
+            if conn:
+                try:
+                    conn.rollback()
+                except:
+                    pass
+            raise e
+        finally:
+            if conn:
+                try:
+                    conn.close()
+                except:
+                    pass
+
     def set_data_rilascio(self, foglio_id: int, data: str) -> None:
         """Imposta la data rilascio di un foglio (campo editabile)"""
         conn = None
@@ -1086,32 +1131,32 @@ class GestionaleCacciaDB:
         cursor = conn.cursor()
         
         query = """
-            SELECT f.*, c.cognome, c.nome, c.numero_tessera
+            SELECT f.*, c.cognome, c.nome, c.numero_tessera, c.telefono, c.cellulare
             FROM fogli_caccia f
             LEFT JOIN cacciatori c ON f.cacciatore_id = c.id
             WHERE f.anno = ?
         """
         params = [anno]
-        
+
         if stato:
             query += " AND f.stato = ?"
             params.append(stato)
-        
+
         query += " ORDER BY f.numero_foglio"
-        
+
         cursor.execute(query, params)
         rows = cursor.fetchall()
         conn.close()
-        
+
         return [dict(row) for row in rows]
-    
+
     def get_fogli_anno_ordinati_per_cacciatore(self, anno: int, stato: Optional[str] = None) -> List[Dict]:
         """Recupera i fogli caccia di un anno ordinati alfabeticamente per cacciatore (Cognome → Nome → N. Foglio)"""
         conn = self.get_connection()
         cursor = conn.cursor()
-        
+
         query = """
-            SELECT f.*, c.cognome, c.nome, c.numero_tessera
+            SELECT f.*, c.cognome, c.nome, c.numero_tessera, c.telefono, c.cellulare
             FROM fogli_caccia f
             LEFT JOIN cacciatori c ON f.cacciatore_id = c.id
             WHERE f.anno = ?

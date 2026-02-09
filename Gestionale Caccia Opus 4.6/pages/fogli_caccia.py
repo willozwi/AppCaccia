@@ -405,27 +405,29 @@ def show_gestione_fogli():
         
         for idx, row in df_edit.iterrows():
             # Formatta date per visualizzazione
-            data_rilascio_fmt = fmt_date_it(row.get('data_rilascio', '')) or ''
             data_restituzione_fmt = fmt_date_it(row.get('data_restituzione', '')) or ''
-            
-            # Formatta file
-            file_path = row.get('file_path', None)
-            if file_path and isinstance(file_path, str) and file_path.strip():
-                file_name = os.path.basename(file_path)
-                file_display = f'📄 {file_name}'
-            else:
-                file_display = 'Nessuno'
-            
+
+            # Costruisci Cognome Nome
+            cognome = str(row.get('cognome', '') or '')
+            nome = str(row.get('nome', '') or '')
+            cognome_nome = f"{cognome} {nome}".strip()
+            if not cognome_nome:
+                cognome_nome = str(row.get('rilasciato_a', '') or '')
+
+            # Contatto telefonico: preferisci cellulare, poi telefono
+            cellulare = str(row.get('cellulare', '') or '')
+            telefono = str(row.get('telefono', '') or '')
+            contatto_tel = cellulare if cellulare else telefono
+
             edit_data.append({
-                'Rilasciato A': str(row.get('rilasciato_a', 'N/A')),
+                'Cognome Nome': cognome_nome,
                 'N. Foglio': str(row.get('numero_foglio', 'N/A')),
+                'Restituito in data': data_restituzione_fmt,
+                'Stampato': bool(row.get('stampato', 0)),
                 'Consegnato': bool(row.get('consegnato', 0)),
-                'Data Rilascio': data_rilascio_fmt,
-                'Restituito': bool(row.get('restituito', 0)),
-                'Data Restituzione': data_restituzione_fmt,
-                'File': file_display
+                'Contatto telefonico': contatto_tel
             })
-            
+
             # Salva mapping indice -> id
             id_map[len(edit_data) - 1] = row.get('id')
         
@@ -438,8 +440,8 @@ def show_gestione_fogli():
             hide_index=True,
             height=min(600, 40 + len(df_display) * 35),
             column_config={
-                "Rilasciato A": st.column_config.TextColumn(
-                    "Rilasciato A",
+                "Cognome Nome": st.column_config.TextColumn(
+                    "Cognome Nome",
                     width="medium",
                     disabled=True
                 ),
@@ -448,28 +450,23 @@ def show_gestione_fogli():
                     width="small",
                     disabled=True
                 ),
+                "Restituito in data": st.column_config.TextColumn(
+                    "Restituito in data",
+                    width="medium",
+                    disabled=True
+                ),
+                "Stampato": st.column_config.CheckboxColumn(
+                    "Stampato",
+                    width="small",
+                    help="Spunta se stampato"
+                ),
                 "Consegnato": st.column_config.CheckboxColumn(
                     "Consegnato",
                     width="small",
                     help="Spunta se consegnato"
                 ),
-                "Data Rilascio": st.column_config.TextColumn(
-                    "Data Rilascio",
-                    width="medium",
-                    disabled=True
-                ),
-                "Restituito": st.column_config.CheckboxColumn(
-                    "Restituito",
-                    width="small",
-                    help="Spunta se restituito"
-                ),
-                "Data Restituzione": st.column_config.TextColumn(
-                    "Data Restituzione",
-                    width="medium",
-                    disabled=True
-                ),
-                "File": st.column_config.TextColumn(
-                    "File",
+                "Contatto telefonico": st.column_config.TextColumn(
+                    "Contatto telefonico",
                     width="medium",
                     disabled=True
                 )
@@ -483,32 +480,28 @@ def show_gestione_fogli():
                 foglio_id = id_map.get(idx)
                 if foglio_id is None:
                     continue
-                
+
+                # Controlla se Stampato è cambiato
+                old_stampato = bool(df_display.iloc[idx]['Stampato'])
+                new_stampato = bool(edited_df.iloc[idx]['Stampato'])
+
+                if old_stampato != new_stampato:
+                    try:
+                        st.session_state.db.set_stampato(foglio_id, new_stampato)
+                        st.toast(f"Stampato aggiornato per {df_display.iloc[idx]['N. Foglio']}", icon="✅")
+                    except Exception as e:
+                        st.error(f"Errore salvataggio Stampato: {e}")
+
                 # Controlla se Consegnato è cambiato
                 old_consegnato = bool(df_display.iloc[idx]['Consegnato'])
                 new_consegnato = bool(edited_df.iloc[idx]['Consegnato'])
-                
+
                 if old_consegnato != new_consegnato:
                     try:
                         st.session_state.db.set_consegnato(foglio_id, new_consegnato)
-                        st.toast(f"✅ Consegnato aggiornato per {df_display.iloc[idx]['N. Foglio']}", icon="✅")
+                        st.toast(f"Consegnato aggiornato per {df_display.iloc[idx]['N. Foglio']}", icon="✅")
                     except Exception as e:
                         st.error(f"Errore salvataggio Consegnato: {e}")
-                
-                # Controlla se Restituito è cambiato
-                old_restituito = bool(df_display.iloc[idx]['Restituito'])
-                new_restituito = bool(edited_df.iloc[idx]['Restituito'])
-                
-                if old_restituito != new_restituito:
-                    try:
-                        st.session_state.db.set_restituito(foglio_id, new_restituito)
-                        # Auto-popola data restituzione se checkbox è spuntato e data è vuota
-                        if new_restituito and not df_fogli.iloc[idx].get('data_restituzione'):
-                            from datetime import date
-                            st.session_state.db.set_data_restituzione(foglio_id, date.today())
-                        st.toast(f"✅ Restituito aggiornato per {df_display.iloc[idx]['N. Foglio']}", icon="✅")
-                    except Exception as e:
-                        st.error(f"Errore salvataggio Restituito: {e}")
         
         # Sezione Azioni aggiuntive (modifica date e apertura file)
         st.markdown("---")
