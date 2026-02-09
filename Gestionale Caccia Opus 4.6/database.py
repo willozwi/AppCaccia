@@ -884,7 +884,38 @@ class GestionaleCacciaDB:
                 except:
                     pass
     
-    def aggiorna_restituzione_foglio(self, foglio_id: int, data_restituzione: str, 
+    def update_contatto_telefonico(self, cacciatore_id: int, value: str) -> None:
+        """Aggiorna il contatto telefonico (cellulare) di un cacciatore"""
+        conn = None
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+
+            cellulare = value.strip() if value else None
+
+            cursor.execute("""
+                UPDATE cacciatori
+                SET cellulare = ?
+                WHERE id = ?
+            """, (cellulare, cacciatore_id))
+
+            conn.commit()
+
+        except Exception as e:
+            if conn:
+                try:
+                    conn.rollback()
+                except:
+                    pass
+            raise e
+        finally:
+            if conn:
+                try:
+                    conn.close()
+                except:
+                    pass
+
+    def aggiorna_restituzione_foglio(self, foglio_id: int, data_restituzione: str,
                                      restituito_da: str = None, note: str = None) -> None:
         """Aggiorna i dati di restituzione di un foglio"""
         conn = None

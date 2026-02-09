@@ -402,6 +402,7 @@ def show_gestione_fogli():
         # Crea DataFrame con colonne editabili
         edit_data = []
         id_map = {}  # Mappa indice -> id foglio
+        cacciatore_map = {}  # Mappa indice -> cacciatore_id
         
         for idx, row in df_edit.iterrows():
             # Formatta date per visualizzazione
@@ -430,13 +431,16 @@ def show_gestione_fogli():
 
             # Salva mapping indice -> id
             id_map[len(edit_data) - 1] = row.get('id')
+            cacciatore_map[len(edit_data) - 1] = row.get('cacciatore_id')
         
         df_display = pd.DataFrame(edit_data)
 
-        # Salva valori originali checkbox PRIMA di data_editor
+        # Salva valori originali PRIMA di data_editor
         # (data_editor potrebbe modificare df_display in-place in alcune versioni di Streamlit)
         original_stampato = df_display['Stampato'].tolist()
         original_consegnato = df_display['Consegnato'].tolist()
+        original_restituzione = df_display['Restituito in data'].tolist()
+        original_contatto = df_display['Contatto telefonico'].tolist()
 
         # Usa data_editor per editing interattivo
         edited_df = st.data_editor(
@@ -458,7 +462,7 @@ def show_gestione_fogli():
                 "Restituito in data": st.column_config.TextColumn(
                     "Restituito in data",
                     width="medium",
-                    disabled=True
+                    help="Inserire data in formato gg/mm/aaaa"
                 ),
                 "Stampato": st.column_config.CheckboxColumn(
                     "Stampato",
@@ -473,7 +477,7 @@ def show_gestione_fogli():
                 "Contatto telefonico": st.column_config.TextColumn(
                     "Contatto telefonico",
                     width="medium",
-                    disabled=True
+                    help="Numero di telefono del cacciatore"
                 )
             },
             key="fogli_data_editor"
@@ -516,6 +520,45 @@ def show_gestione_fogli():
                                 changes_saved = True
                             except Exception as e:
                                 st.error(f"Errore salvataggio Consegnato: {e}")
+
+                    if "Restituito in data" in row_changes:
+                        old_val = original_restituzione[row_idx]
+                        new_val = str(row_changes["Restituito in data"]).strip()
+                        if old_val != new_val:
+                            try:
+                                # Converti da formato italiano gg/mm/aaaa a ISO yyyy-mm-dd
+                                data_iso = None
+                                if new_val:
+                                    try:
+                                        data_iso = dt.datetime.strptime(new_val, '%d/%m/%Y').strftime('%Y-%m-%d')
+                                    except ValueError:
+                                        # Prova anche formato ISO diretto
+                                        try:
+                                            dt.datetime.strptime(new_val, '%Y-%m-%d')
+                                            data_iso = new_val
+                                        except ValueError:
+                                            st.error(f"Formato data non valido per {numero_foglio}. Usare gg/mm/aaaa")
+                                            data_iso = None
+                                st.session_state.db.set_data_restituzione(foglio_id, data_iso)
+                                st.toast(f"Data restituzione aggiornata per {numero_foglio}", icon="✅")
+                                changes_saved = True
+                            except Exception as e:
+                                st.error(f"Errore salvataggio data restituzione: {e}")
+
+                    if "Contatto telefonico" in row_changes:
+                        old_val = original_contatto[row_idx]
+                        new_val = str(row_changes["Contatto telefonico"]).strip()
+                        if old_val != new_val:
+                            cacciatore_id = cacciatore_map.get(row_idx)
+                            if cacciatore_id:
+                                try:
+                                    st.session_state.db.update_contatto_telefonico(cacciatore_id, new_val)
+                                    st.toast(f"Contatto telefonico aggiornato per {numero_foglio}", icon="✅")
+                                    changes_saved = True
+                                except Exception as e:
+                                    st.error(f"Errore salvataggio contatto telefonico: {e}")
+                            else:
+                                st.warning(f"Nessun cacciatore associato al foglio {numero_foglio}")
 
                 if changes_saved:
                     st.rerun()
