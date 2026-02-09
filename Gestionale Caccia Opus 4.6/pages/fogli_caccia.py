@@ -425,7 +425,7 @@ def show_gestione_fogli():
                 'N. Foglio': str(row.get('numero_foglio', 'N/A')),
                 'Restituito in data': data_restituzione_fmt,
                 'Stampato': bool(row.get('stampato', 0)),
-                'Consegnato': bool(row.get('consegnato', 0)),
+                'Consegnato': fmt_date_it(row.get('data_consegna', '')) or '',
                 'Contatto telefonico': contatto_tel
             })
 
@@ -469,10 +469,10 @@ def show_gestione_fogli():
                     width="small",
                     help="Spunta se stampato"
                 ),
-                "Consegnato": st.column_config.CheckboxColumn(
+                "Consegnato": st.column_config.TextColumn(
                     "Consegnato",
-                    width="small",
-                    help="Spunta se consegnato"
+                    width="medium",
+                    help="Inserire data di consegna in formato gg/mm/aaaa"
                 ),
                 "Contatto telefonico": st.column_config.TextColumn(
                     "Contatto telefonico",
@@ -512,11 +512,24 @@ def show_gestione_fogli():
 
                     if "Consegnato" in row_changes:
                         old_val = original_consegnato[row_idx]
-                        new_val = bool(row_changes["Consegnato"])
+                        new_val = str(row_changes["Consegnato"]).strip()
                         if old_val != new_val:
                             try:
-                                st.session_state.db.set_consegnato(foglio_id, new_val)
-                                st.toast(f"Consegnato aggiornato per {numero_foglio}", icon="✅")
+                                # Converti da formato italiano gg/mm/aaaa a ISO yyyy-mm-dd
+                                data_iso = None
+                                if new_val:
+                                    try:
+                                        data_iso = dt.datetime.strptime(new_val, '%d/%m/%Y').strftime('%Y-%m-%d')
+                                    except ValueError:
+                                        # Prova anche formato ISO diretto
+                                        try:
+                                            dt.datetime.strptime(new_val, '%Y-%m-%d')
+                                            data_iso = new_val
+                                        except ValueError:
+                                            st.error(f"Formato data non valido per {numero_foglio}. Usare gg/mm/aaaa")
+                                            data_iso = None
+                                st.session_state.db.set_data_consegna(foglio_id, data_iso)
+                                st.toast(f"Data consegna aggiornata per {numero_foglio}", icon="✅")
                                 changes_saved = True
                             except Exception as e:
                                 st.error(f"Errore salvataggio Consegnato: {e}")

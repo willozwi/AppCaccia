@@ -661,6 +661,59 @@ class GestionaleCacciaDB:
                 except:
                     pass
     
+    def set_data_consegna(self, foglio_id: int, data: str) -> None:
+        """Imposta la data di consegna di un foglio e aggiorna consegnato/stato di conseguenza"""
+        conn = None
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+
+            if data:
+                # Data inserita -> imposta consegnato=1 e stato=CONSEGNATO
+                cursor.execute("""
+                    UPDATE fogli_caccia
+                    SET data_consegna = ?,
+                        consegnato = 1,
+                        stato = 'CONSEGNATO',
+                        data_modifica = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                """, (data, foglio_id))
+            else:
+                # Data cancellata -> rimuovi consegna
+                cursor.execute("""
+                    UPDATE fogli_caccia
+                    SET data_consegna = NULL,
+                        consegnato = 0,
+                        stato = CASE
+                            WHEN stato = 'CONSEGNATO' THEN 'DISPONIBILE'
+                            ELSE stato
+                        END,
+                        data_modifica = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                """, (foglio_id,))
+
+            conn.commit()
+
+            try:
+                self.log_attivita('SISTEMA', 'UPDATE', 'fogli_caccia', foglio_id,
+                                 f"Data consegna: {data}")
+            except:
+                pass
+
+        except Exception as e:
+            if conn:
+                try:
+                    conn.rollback()
+                except:
+                    pass
+            raise e
+        finally:
+            if conn:
+                try:
+                    conn.close()
+                except:
+                    pass
+
     def toggle_consegnato(self, foglio_id: int) -> bool:
         """Toggle stato consegnato e ritorna nuovo valore, mantenendo stato coerente"""
         conn = None
