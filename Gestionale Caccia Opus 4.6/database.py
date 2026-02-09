@@ -899,12 +899,14 @@ class GestionaleCacciaDB:
     
     
     def set_data_restituzione(self, foglio_id: int, value) -> None:
-        """Imposta la data restituzione di un foglio (campo editabile)"""
+        """Imposta la data restituzione di un foglio (campo editabile).
+        Se viene impostata una data, lo stato passa a RESTITUITO.
+        Se la data viene rimossa, lo stato torna a RILASCIATO."""
         conn = None
         try:
             conn = self.get_connection()
             cursor = conn.cursor()
-            
+
             # Convert date object to string if needed, or set to None
             if value is None:
                 data_str = None
@@ -914,13 +916,25 @@ class GestionaleCacciaDB:
             else:
                 # It's already a string or None
                 data_str = value if value else None
-            
-            cursor.execute("""
-                UPDATE fogli_caccia 
-                SET data_restituzione = ?, data_modifica = CURRENT_TIMESTAMP
-                WHERE id = ?
-            """, (data_str, foglio_id))
-            
+
+            if data_str:
+                # Data impostata -> stato RESTITUITO
+                cursor.execute("""
+                    UPDATE fogli_caccia
+                    SET data_restituzione = ?, stato = 'RESTITUITO',
+                        data_modifica = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                """, (data_str, foglio_id))
+            else:
+                # Data rimossa -> stato torna a RILASCIATO
+                cursor.execute("""
+                    UPDATE fogli_caccia
+                    SET data_restituzione = NULL, stato = 'RILASCIATO',
+                        restituito_da = NULL,
+                        data_modifica = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                """, (foglio_id,))
+
             conn.commit()
             
         except Exception as e:
