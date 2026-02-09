@@ -432,7 +432,12 @@ def show_gestione_fogli():
             id_map[len(edit_data) - 1] = row.get('id')
         
         df_display = pd.DataFrame(edit_data)
-        
+
+        # Salva valori originali checkbox PRIMA di data_editor
+        # (data_editor potrebbe modificare df_display in-place in alcune versioni di Streamlit)
+        original_stampato = df_display['Stampato'].tolist()
+        original_consegnato = df_display['Consegnato'].tolist()
+
         # Usa data_editor per editing interattivo
         edited_df = st.data_editor(
             df_display,
@@ -474,34 +479,46 @@ def show_gestione_fogli():
             key="fogli_data_editor"
         )
         
-        # Rileva modifiche e salva automaticamente
-        if edited_df is not None:
-            for idx in range(len(edited_df)):
-                foglio_id = id_map.get(idx)
-                if foglio_id is None:
-                    continue
+        # Rileva modifiche tramite session state e salva automaticamente
+        if "fogli_data_editor" in st.session_state:
+            editor_changes = st.session_state["fogli_data_editor"]
+            edited_rows = editor_changes.get("edited_rows", {})
 
-                # Controlla se Stampato è cambiato
-                old_stampato = bool(df_display.iloc[idx]['Stampato'])
-                new_stampato = bool(edited_df.iloc[idx]['Stampato'])
+            if edited_rows:
+                changes_saved = False
 
-                if old_stampato != new_stampato:
-                    try:
-                        st.session_state.db.set_stampato(foglio_id, new_stampato)
-                        st.toast(f"Stampato aggiornato per {df_display.iloc[idx]['N. Foglio']}", icon="✅")
-                    except Exception as e:
-                        st.error(f"Errore salvataggio Stampato: {e}")
+                for row_idx_str, row_changes in edited_rows.items():
+                    row_idx = int(row_idx_str)
+                    foglio_id = id_map.get(row_idx)
+                    if foglio_id is None:
+                        continue
 
-                # Controlla se Consegnato è cambiato
-                old_consegnato = bool(df_display.iloc[idx]['Consegnato'])
-                new_consegnato = bool(edited_df.iloc[idx]['Consegnato'])
+                    numero_foglio = df_display.iloc[row_idx]['N. Foglio']
 
-                if old_consegnato != new_consegnato:
-                    try:
-                        st.session_state.db.set_consegnato(foglio_id, new_consegnato)
-                        st.toast(f"Consegnato aggiornato per {df_display.iloc[idx]['N. Foglio']}", icon="✅")
-                    except Exception as e:
-                        st.error(f"Errore salvataggio Consegnato: {e}")
+                    if "Stampato" in row_changes:
+                        old_val = original_stampato[row_idx]
+                        new_val = bool(row_changes["Stampato"])
+                        if old_val != new_val:
+                            try:
+                                st.session_state.db.set_stampato(foglio_id, new_val)
+                                st.toast(f"Stampato aggiornato per {numero_foglio}", icon="✅")
+                                changes_saved = True
+                            except Exception as e:
+                                st.error(f"Errore salvataggio Stampato: {e}")
+
+                    if "Consegnato" in row_changes:
+                        old_val = original_consegnato[row_idx]
+                        new_val = bool(row_changes["Consegnato"])
+                        if old_val != new_val:
+                            try:
+                                st.session_state.db.set_consegnato(foglio_id, new_val)
+                                st.toast(f"Consegnato aggiornato per {numero_foglio}", icon="✅")
+                                changes_saved = True
+                            except Exception as e:
+                                st.error(f"Errore salvataggio Consegnato: {e}")
+
+                if changes_saved:
+                    st.rerun()
         
         # Sezione Azioni aggiuntive (modifica date e apertura file)
         st.markdown("---")
