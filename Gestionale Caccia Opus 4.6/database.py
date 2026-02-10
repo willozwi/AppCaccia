@@ -679,11 +679,12 @@ class GestionaleCacciaDB:
                     WHERE id = ?
                 """, (data, foglio_id))
             else:
-                # Data cancellata -> rimuovi consegna
+                # Data cancellata -> rimuovi consegna e pulisci tutti i campi correlati
                 cursor.execute("""
                     UPDATE fogli_caccia
                     SET data_consegna = NULL,
                         consegnato = 0,
+                        consegnato_da = NULL,
                         stato = CASE
                             WHEN stato = 'CONSEGNATO' THEN 'DISPONIBILE'
                             ELSE stato
@@ -926,11 +927,18 @@ class GestionaleCacciaDB:
                     WHERE id = ?
                 """, (data_str, foglio_id))
             else:
-                # Data rimossa -> stato torna a RILASCIATO
+                # Data rimossa -> pulisci campi restituzione e ripristina stato precedente
+                # Lo stato viene determinato in base ai campi ancora compilati
                 cursor.execute("""
                     UPDATE fogli_caccia
-                    SET data_restituzione = NULL, stato = 'RILASCIATO',
+                    SET data_restituzione = NULL,
                         restituito_da = NULL,
+                        stato = CASE
+                            WHEN data_rilascio IS NOT NULL THEN 'RILASCIATO'
+                            WHEN stampato = 1 THEN 'STAMPATO'
+                            WHEN data_consegna IS NOT NULL OR consegnato = 1 THEN 'CONSEGNATO'
+                            ELSE 'DISPONIBILE'
+                        END,
                         data_modifica = CURRENT_TIMESTAMP
                     WHERE id = ?
                 """, (foglio_id,))
