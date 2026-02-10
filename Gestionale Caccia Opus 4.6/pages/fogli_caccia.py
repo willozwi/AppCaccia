@@ -94,10 +94,16 @@ def show_gestione_fogli():
         )
     
     with col2:
-        # Stati effettivi dai file Excel
-        filtro_stato = st.selectbox(
+        # Mappa display -> valore DB (uppercase)
+        stati_map = {
+            'Tutti': None,
+            'Consegnato': 'CONSEGNATO',
+            'Stampato': 'STAMPATO',
+            'Da rinnovare': 'DA_RINNOVARE'
+        }
+        filtro_stato_display = st.selectbox(
             "Filtra per Stato",
-            options=['Tutti', 'Consegnato', 'Stampato', 'Da rinnovare']
+            options=list(stati_map.keys())
         )
     
     with col3:
@@ -148,7 +154,7 @@ def show_gestione_fogli():
                        on_click=_reset_filtri)
     
     # Recupera fogli
-    stato_filtro = None if filtro_stato == 'Tutti' else filtro_stato
+    stato_filtro = stati_map.get(filtro_stato_display)
     fogli = st.session_state.db.get_fogli_anno(anno_selezionato, stato_filtro)
     
     # Statistiche
@@ -930,10 +936,53 @@ def show_consegna_fogli():
                     
                     st.success(f"✅ Registrati {count} fogli consegnati!")
                     st.rerun()
-                    
+
                 except Exception as e:
                     st.error(f"⚠️ Errore: {str(e)}")
 
+    # ========== ELENCO FOGLI GIA' CONSEGNATI ==========
+    st.markdown("---")
+    st.subheader("📋 Fogli Consegnati")
+
+    fogli_consegnati = st.session_state.db.get_fogli_anno_ordinati_per_cacciatore(anno_corrente, 'CONSEGNATO')
+
+    if fogli_consegnati:
+        st.info(f"📄 Totale fogli consegnati: {len(fogli_consegnati)}")
+
+        # Intestazione tabella
+        header_cols = st.columns([2, 1.5, 1.5, 1.5, 1.5])
+        headers = ['Cognome Nome', 'N. Foglio', 'Data Consegna', 'Consegnato Da', 'Contatto']
+        for col, header in zip(header_cols, headers):
+            col.markdown(f"**{header}**")
+
+        st.markdown("---")
+
+        for idx, f in enumerate(fogli_consegnati):
+            row_cols = st.columns([2, 1.5, 1.5, 1.5, 1.5])
+
+            cognome = f.get('cognome', '') or ''
+            nome = f.get('nome', '') or ''
+            cognome_nome = f"{cognome} {nome}".strip()
+            if not cognome_nome:
+                cognome_nome = f.get('rilasciato_a', '') or 'N/A'
+
+            numero_foglio = f.get('numero_foglio', 'N/A')
+            data_consegna_fmt = fmt_date_it(f.get('data_consegna', '')) or 'N/A'
+            consegnato_da = f.get('consegnato_da', '') or ''
+            cellulare = str(f.get('cellulare', '') or '')
+            telefono = str(f.get('telefono', '') or '')
+            contatto = cellulare if cellulare else telefono
+
+            row_cols[0].text(cognome_nome)
+            row_cols[1].text(numero_foglio)
+            row_cols[2].text(data_consegna_fmt)
+            row_cols[3].text(consegnato_da)
+            row_cols[4].text(contatto)
+
+            if idx < len(fogli_consegnati) - 1:
+                st.markdown("<hr style='margin: 3px 0; opacity: 0.1;'>", unsafe_allow_html=True)
+    else:
+        st.info("Nessun foglio ancora consegnato")
 
 
 def show_restituzione_fogli():
