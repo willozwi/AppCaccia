@@ -43,18 +43,18 @@ def show():
     # Tabs
     tab1, tab2, tab3 = st.tabs([
         "📋 Gestione Fogli",
-        "📥 Consegna Fogli",
-        "🔄 Restituzione Fogli"
+        "🔄 Restituzione Fogli",
+        "📥 Consegna Fogli"
     ])
-    
+
     with tab1:
         show_gestione_fogli()
-    
+
     with tab2:
-        show_consegna_fogli()
-    
-    with tab3:
         show_restituzione_fogli()
+
+    with tab3:
+        show_consegna_fogli()
 
 def _reset_filtri():
     """Callback per resettare tutti i filtri (eseguito prima del re-render)"""
